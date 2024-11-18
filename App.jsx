@@ -5,15 +5,52 @@ import {
   View,
   TouchableOpacity,
   TextInput,
+  FlatList,
 } from 'react-native';
 import {db} from './src/firebaseConnection';
-import {doc, getDoc, setDoc, collection, addDoc} from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  addDoc,
+  getDocs,
+  onSnapshot,
+  updateDoc,
+} from 'firebase/firestore';
+
+import {UsersList} from './src/users';
 
 export default function DBtest() {
   const [nome, setNome] = useState('');
   const [idade, setIdade] = useState('');
   const [cargo, setCargo] = useState('');
+  const [users, setUsers] = useState('');
+
   const [showForm, setShowForm] = useState(true);
+  const [isEditing, setIsEditing] = useState('');
+
+  useEffect(() => {
+    async function getDados() {
+      const usersRef = collection(db, 'users');
+      onSnapshot(usersRef, snapshot => {
+        let lista = [];
+
+        snapshot.forEach(doc => {
+          lista.push({
+            id: doc.id,
+            nome: doc.data().nome,
+            idade: doc.data().idade,
+            cargo: doc.data().cargo,
+          });
+        });
+
+        setUsers(lista);
+      });
+    }
+
+    getDados();
+  }, []);
 
   async function register() {
     await addDoc(collection(db, 'users'), {
@@ -34,6 +71,26 @@ export default function DBtest() {
 
   function toggle() {
     setShowForm(!showForm);
+  }
+
+  function editUser(data) {
+    setNome(data.nome);
+    setIdade(data.idade);
+    setCargo(data.cargo);
+    setIsEditing(data.id);
+  }
+
+  async function handleEditUser() {
+    const docRef = doc(db, 'users', isEditing)
+    await updateDoc(docRef, {
+      nome: nome,
+      idade: idade,
+      cargo: cargo,
+    })
+    setNome('')
+    setIdade('')
+    setCargo('')
+    setIsEditing('')
   }
 
   return (
@@ -65,9 +122,15 @@ export default function DBtest() {
             onChangeText={text => setCargo(text)}
           />
 
-          <TouchableOpacity style={styles.btn} onPress={register}>
-            <Text style={styles.btnText}>Cadastrar</Text>
-          </TouchableOpacity>
+          {isEditing !== '' ? (
+            <TouchableOpacity style={styles.btn} onPress={handleEditUser}>
+              <Text style={styles.btnText}>Editar Usuario</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.btn} onPress={register}>
+              <Text style={styles.btnText}>Cadastrar</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -76,6 +139,17 @@ export default function DBtest() {
           {showForm ? 'Esconder formulário' : 'Mostrar formulário'}
         </Text>
       </TouchableOpacity>
+
+      <Text style={styles.listText}>Usuários</Text>
+
+      <FlatList
+        style={styles.list}
+        data={users}
+        keyExtractor={item => String(item.id)}
+        renderItem={({item}) => (
+          <UsersList data={item} handleEdit={item => editUser(item)} />
+        )}
+      />
     </View>
   );
 }
@@ -90,6 +164,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: 'bold',
     color: '#000',
+    textAlign: 'center',
   },
 
   text: {
@@ -117,5 +192,18 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#fff',
     textAlign: 'center',
+  },
+
+  listText: {
+    fontSize: 20,
+    color: '#000',
+    marginTop: 15,
+    marginLeft: 8,
+  },
+
+  list: {
+    marginTop: 8,
+    marginLeft: 8,
+    marginRight: 8,
   },
 });
