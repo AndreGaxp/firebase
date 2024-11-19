@@ -5,151 +5,100 @@ import {
   View,
   TouchableOpacity,
   TextInput,
-  FlatList,
 } from 'react-native';
-import {db} from './src/firebaseConnection';
+import {FormUsers} from './src/FormUsers';
+import {auth} from './src/firebaseConnection';
 import {
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  addDoc,
-  getDocs,
-  onSnapshot,
-  updateDoc,
-} from 'firebase/firestore';
-
-import {UsersList} from './src/users';
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from 'firebase/auth';
 
 export default function DBtest() {
-  const [nome, setNome] = useState('');
-  const [idade, setIdade] = useState('');
-  const [cargo, setCargo] = useState('');
-  const [users, setUsers] = useState('');
-
-  const [showForm, setShowForm] = useState(true);
-  const [isEditing, setIsEditing] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setpassword] = useState('');
+  const [authUser, setAuthUser] = useState(null);
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function getDados() {
-      const usersRef = collection(db, 'users');
-      onSnapshot(usersRef, snapshot => {
-        let lista = [];
-
-        snapshot.forEach(doc => {
-          lista.push({
-            id: doc.id,
-            nome: doc.data().nome,
-            idade: doc.data().idade,
-            cargo: doc.data().cargo,
-          });
+    const unsub = onAuthStateChanged(auth, user => {
+      if (user) {
+        setAuthUser({
+          email: user.email,
+          uid: user.uid,
         });
 
-        setUsers(lista);
-      });
-    }
+        setLoading(false)
+        return;
+      }
 
-    getDados();
+      setAuthUser(null);
+      setLoading(false)
+    });
   }, []);
 
-  async function register() {
-    await addDoc(collection(db, 'users'), {
-      nome: nome,
-      idade: idade,
-      cargo: cargo,
-    })
-      .then(() => {
-        console.log('CADASTRADO COM SUCESSO');
-        setNome('');
-        setIdade('');
-        setCargo('');
-      })
-      .catch(err => {
-        console.log(err);
-      });
+  async function handleCreateUser() {
+    const user = await createUserWithEmailAndPassword(auth, email, password);
+    console.log(user);
   }
 
-  function toggle() {
-    setShowForm(!showForm);
+  async function handleLogin() {
+    const user = await signInWithEmailAndPassword(auth, email, password);
+    console.log('USUARIO LOGADO');
+    console.log(user);
+    setAuthUser({
+      email: user.user.email,
+      uid: user.user.uid,
+    });
   }
 
-  function editUser(data) {
-    setNome(data.nome);
-    setIdade(data.idade);
-    setCargo(data.cargo);
-    setIsEditing(data.id);
+  async function handleLogout() {
+    await signOut(auth);
+    setAuthUser(null);
   }
 
-  async function handleEditUser() {
-    const docRef = doc(db, 'users', isEditing)
-    await updateDoc(docRef, {
-      nome: nome,
-      idade: idade,
-      cargo: cargo,
-    })
-    setNome('')
-    setIdade('')
-    setCargo('')
-    setIsEditing('')
+  if (authUser) {
+    return (
+      <View style={styles.container}>
+        <FormUsers />
+      </View>
+    );
   }
-
   return (
     <View style={styles.container}>
-      {showForm && (
-        <View>
-          <Text style={styles.title}> FIREBASE - CADASTRO </Text>
-          <Text style={styles.text}> Nome </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite o seu nome"
-            value={nome}
-            onChangeText={text => setNome(text)}
-          />
 
-          <Text style={styles.text}> Idade </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite a sua idade"
-            value={idade}
-            onChangeText={text => setIdade(text)}
-          />
+    {loading && <Text style={styles.carregando}>Carregando informações...</Text>}
 
-          <Text style={styles.text}> Cargo </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite o seu cargo"
-            value={cargo}
-            onChangeText={text => setCargo(text)}
-          />
+      <Text style={styles.txtInput}>Email: </Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Digite seu email"
+        value={email}
+        onChangeText={text => setEmail(text)}
+      />
+      <Text style={styles.txtInput}>Senha: </Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Digite sua senha"
+        value={password}
+        onChangeText={text => setpassword(text)}
+        secureTextEntry={true}
+      />
 
-          {isEditing !== '' ? (
-            <TouchableOpacity style={styles.btn} onPress={handleEditUser}>
-              <Text style={styles.btnText}>Editar Usuario</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.btn} onPress={register}>
-              <Text style={styles.btnText}>Cadastrar</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.btn} onPress={toggle}>
-        <Text style={styles.btnText}>
-          {showForm ? 'Esconder formulário' : 'Mostrar formulário'}
-        </Text>
+      <TouchableOpacity style={styles.btn} onPress={handleLogin}>
+        <Text style={styles.btnText}>Fazer Login</Text>
       </TouchableOpacity>
 
-      <Text style={styles.listText}>Usuários</Text>
+      <TouchableOpacity style={styles.btn} onPress={handleCreateUser}>
+        <Text style={styles.btnText}>Criar uma conta</Text>
+      </TouchableOpacity>
 
-      <FlatList
-        style={styles.list}
-        data={users}
-        keyExtractor={item => String(item.id)}
-        renderItem={({item}) => (
-          <UsersList data={item} handleEdit={item => editUser(item)} />
-        )}
-      />
+      {authUser && (
+        <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
+          <Text style={styles.btnText}>Sair da conta</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -160,33 +109,25 @@ const styles = StyleSheet.create({
     paddingTop: 30,
   },
 
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#000',
-    textAlign: 'center',
-  },
-
-  text: {
-    marginTop: 30,
-    color: '#000',
+  txtInput: {
+    marginLeft: 8,
     fontSize: 18,
-    marginLeft: 4,
+    color: '#000',
   },
 
   input: {
-    borderWidth: 1,
     marginLeft: 8,
     marginRight: 8,
+    borderWidth: 1,
+    marginBottom: 14,
   },
 
   btn: {
     backgroundColor: '#000',
-    padding: 8,
-    borderRadius: 7,
-    marginTop: 10,
-    marginLeft: 8,
     marginRight: 8,
+    marginLeft: 8,
+    padding: 8,
+    marginBottom: 8,
   },
 
   btnText: {
@@ -194,16 +135,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  listText: {
-    fontSize: 20,
+  usuario: {
+    fontSize: 16,
     color: '#000',
-    marginTop: 15,
     marginLeft: 8,
+    marginBottom: 15,
   },
 
-  list: {
-    marginTop: 8,
-    marginLeft: 8,
+  btnLogout: {
+    backgroundColor: '#ff0000',
     marginRight: 8,
+    marginLeft: 8,
+    padding: 8,
+    marginBottom: 8,
   },
+
+  carregando:{
+    fontSize: 20,
+    marginLeft: 8,
+    color: '#000',
+    marginBottom: 8,
+  }
 });
